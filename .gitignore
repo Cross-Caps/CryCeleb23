@@ -7,3 +7,5 @@ concatenated_audio_train
 __pycache__/
 experiments/
 *.sw*
+data
+spkrec-ecapa-voxceleb
