@@ -1,4 +1,3 @@
-# %% [markdown]
 # # Fine-tuning ECAPA-TDNN on  [CryCeleb2023](https://huggingface.co/spaces/competitions/CryCeleb2023) using [SpeechBrain](https://speechbrain.readthedocs.io)
 # 
 # This notebook should help you get started training your own models for CryCeleb2023 challenge.
@@ -8,16 +7,6 @@
 # Author: David Budaghyan (Ubenwa)
 # 
 
-# %% [markdown]
-# ### Imports
-
-# %%
-# For Colab - uncomment and run the following to set up the repo
-# !pip install speechbrain
-# !git clone https://github.com/Ubenwa/cryceleb2023.git
-# %cd cryceleb2023
-
-# %%
 
 import pathlib
 import random
@@ -27,7 +16,6 @@ import pandas as pd
 import seaborn as sns
 import speechbrain as sb
 import torch
-from huggingface_hub import hf_hub_download
 from hyperpyyaml import load_hyperpyyaml
 from IPython.display import display
 from speechbrain.dataio.dataio import read_audio, write_audio
@@ -35,7 +23,7 @@ from speechbrain.dataio.dataset import DynamicItemDataset
 from speechbrain.dataio.encoder import CategoricalEncoder
 from speechbrain.lobes.augment import TimeDomainSpecAugment
 
-from crybrain import CryBrain, download_data
+from crybrain import CryBrain
 from tqdm import tqdm
 from functools import partialmethod
 
@@ -43,20 +31,6 @@ tqdm.__init__ = partialmethod(tqdm.__init__, disable=True)
 
 dataset_path = "data"
 
-# %% [markdown]
-# ### Download data
-# 
-# You need to log in to HuggingFace to be able to download the dataset
-
-# %%
-from huggingface_hub import notebook_login
-
-notebook_login()
-
-# %%
-download_data(dataset_path)
-
-# %%
 # read metadata
 metadata = pd.read_csv(
     f"{dataset_path}/metadata.csv", dtype={"baby_id": str, "chronological_index": str}
@@ -69,16 +43,11 @@ display(
 )
 display(train_metadata.describe())
 
-# %%
 dev_babies = set(train_metadata.loc[train_metadata["split"] == "dev", "baby_id"])
 print(dev_babies)
 
-# %% [markdown]
-# ### Concatenate cry sounds
-# 
 # We are given short cry sounds for each baby. Here we simply concatenate them. 
 
-# %%
 # read the segments
 train_metadata["cry"] = train_metadata.apply(
     lambda row: read_audio(f'{dataset_path}/{row["file_name"]}').numpy(), axis=1
@@ -107,10 +76,7 @@ display(manifest_df)
 ax = sns.histplot(manifest_df, x="duration")
 ax.set_title("Histogram of Concatenated Cry Sound Lengths")
 
-# %% [markdown]
-# During training, we will extract random cuts of 3-5 seconds from concatenated audio
 
-# %%
 def create_cut_length_interval(row, cut_length_interval):
     """cut_length_interval is a tuple indicating the range of lengths we want our chunks to be.
     this function computes the valid range of chunk lengths for each audio file
@@ -134,14 +100,12 @@ manifest_df["cut_length_interval_in_frames"] = manifest_df.apply(
     lambda row: create_cut_length_interval(row, cut_length_interval=cut_length_interval), axis=1
 )
 
-# %% [markdown]
 # ### Split into train and val
 # 
 # For training a classfier, we can split the data into train/val in any way, as long as val does not contain new classes
 # 
 # One way to split is to split by period: train on birth recordings and validate on discharge
 
-# %%
 # we can train on any subset of babies (e.g. to reduce the number of classes, only keep babies with long enough cries, etc)
 def get_babies_with_both_recordings(manifest_df):
     count_of_periods_per_baby = manifest_df.groupby("baby_id")["period"].count()
@@ -151,18 +115,12 @@ def get_babies_with_both_recordings(manifest_df):
     return baby_ids_with_recording_from_both_periods
 
 
-# def get_babies_with_a_birth_recording(manifest_df):
-#   bool_series = manifest_df.groupby('baby_id')['period'].unique().apply(set(['B']).issubset)
-#   baby_ids_with_a_recordings_from_birth = bool_series[bool_series].index
-#   return baby_ids_with_a_recordings_from_birth
-
-
 def split_by_period(row, included_baby_ids):
     if row["baby_id"] in included_baby_ids:
-        if row["period"] == "D" and row["train_split"] == "dev":
-            return "val"
-        else:
+        if row["period"] == "B" or row["train_split"] == "train":
             return "train"
+        else:
+            return "val"
     else:
         return "not_used"
 
@@ -182,12 +140,6 @@ display(
 )
 manifest_df.set_index("id").to_json("manifest.json", orient="index")
 
-# %% [markdown]
-# ### Create dynamic datasets
-# 
-# See SpeechBrain documentation to understand details
-
-# %%
 # create a dynamic dataset from the csv, only used to create train and val datasets
 dataset = DynamicItemDataset.from_json("manifest.json")
 baby_id_encoder = CategoricalEncoder()
@@ -233,14 +185,6 @@ datasets["train"].add_dynamic_item(
     audio_pipeline, takes=["file_path", "cut_length_interval_in_frames"], provides="sig"
 )
 
-print(datasets["train"][0])
-
-# %% [markdown]
-# ### Fine-tune the classifier
-# 
-# Here we use a very basic example that just trains for 5 epochs
-
-# %%
 config_filename = "hparams/ecapa_voxceleb_basic.yaml"
 overrides = {
     "seed": 3011,
@@ -249,18 +193,12 @@ overrides = {
     "bs": 32,
     "n_epochs": 1000,
 }
-device = "cuda"
+device = "cuda:0"
 run_opts = {"device": device}
-###########################################
-# Load hyperparameters file with command-line overrides.
+
 with open(config_filename) as fin:
     hparams = load_hyperpyyaml(fin, overrides)
 
-#hparams['augment_pipeline'] = [TimeDomainSpecAugment(perturb_prob = 0.5,
-#                                                                     drop_freq_prob=0.5,
-#                                                                     drop_chunk_prob=0.5)]
-
-#hparams['concat_augment'] = False
 # Create experiment directory
 sb.create_experiment_directory(
     experiment_directory=hparams["experiment_dir"],
@@ -285,8 +223,8 @@ if "pretrained_embedding_model" in hparams:
 crybrain.fit(
     epoch_counter=crybrain.hparams.epoch_counter,
     train_set=datasets["train"],
-    valid_set=datasets["val"],
     train_loader_kwargs=hparams["train_dataloader_options"],
+    valid_set=datasets["val"],
     valid_loader_kwargs=hparams["val_dataloader_options"],
 )
 
