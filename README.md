@@ -1,5 +1,5 @@
 <h1 align="center">
-<p>CryCeleb23 :snowflake:</p>
+<p>CryCeleb23 :baby:</p>
 <p align="center">
 <img alt="GitHub" src="https://img.shields.io/github/license/cross-caps/AFLI?color=green&logo=GNU&logoColor=green">
 <img alt="python" src="https://img.shields.io/badge/python-%3E%3D3.8-blue?logo=python">
