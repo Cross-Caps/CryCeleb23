@@ -21,7 +21,7 @@ Here's a non-exhaustive list of selected methods we tried, none of which improve
 
 - Adding `WavAugument` or `SpecAugment` to the signal during the training phase
 - Using trainable `SincConv` on the raw signal as an approximation of learnable filters before passing the output to the ECAPA
-- Using `LogSpectrograms` instead of `MelSpectrograms`
+- Using alternative spectral representations like `LogSpectrograms` instead of `MelSpectrograms`
 - `Inverse-Mel filterbanks` that have been shown to be effective in literature for modelling high-pitched speakers like children.
 - Feeding the audio to Large scale Wave2Vec/Transformer models (Like Unispeech-SAT and WavLM) followed by a TDNN head. [Reference](https://huggingface.co/docs/transformers/v4.20.0/en/model_doc/unispeech-sat#transformers.UniSpeechSatForXVector)
   - Pretrained Unispeech-SAT models performed better than pretrained ECAPA models. Finetunned models didn't perform well due to a lack of training data - A direction worth exploring.
